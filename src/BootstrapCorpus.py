@@ -223,5 +223,8 @@ if __name__=="__main__":
         logging.info(len(surprising))
         with open(outfile,'w') as outstream:
             for (term,score) in candidates:
-                outstream.write("{}\t{}\n".format(term,score))
+                if score < 0.505:
+                    break
+                else:
+                    outstream.write("{}\t{}\n".format(term,score))
 
