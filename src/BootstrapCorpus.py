@@ -6,6 +6,7 @@ import nlp_tools
 import spacy,operator
 import logging
 import configparser,ast,os,sys
+from time import time
 
 
 def make_countdict(alldata):
@@ -169,6 +170,7 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
     logging.info(len(trialsA))
     indicatordict = {}
     for i in range(0, repeats):
+        starttime=time()
         logging.info("Bootstrapping corpusB repetition {}".format(i))
         corpB = bootstrap_corpus(worddata, trialsB, allreqs,prop=prop)
         logging.info("Analysing corpus")
@@ -179,6 +181,8 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
             logging.info("Analysing corpus")
             corpusA = nlp_tools.corpus(corpA, nlp, prop=100, ner=False, loadfiles=False)
             logging.info("Comparing corpora")
+            timetaken=time()-starttime
+            logging.info("Time taken for this iteration: {}".format(timetaken))
             indicatordict = compare(corpusA, corpusB, indicatordict)
 
     logging.info("Generating candidates")
