@@ -213,7 +213,7 @@ if __name__=="__main__":
 
     for Areq,outfile in zip(Areqs,outfiles):
 
-        candidates=bootstrap_compare(Areq,allreqlist,worddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
+        candidates=bootstrap_compare([Areq],allreqlist,worddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
         logging.info(candidates[:10])
         surprising=[(cand,score) for (cand,score) in candidates if score > 0.9]
         logging.info(len(surprising))
