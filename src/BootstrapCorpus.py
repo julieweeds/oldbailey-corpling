@@ -195,8 +195,8 @@ if __name__=="__main__":
 
 
     myconfig=configparser.ConfigParser()
-    if len(sys.args)>1:
-        configfile=sys.args[1]
+    if len(sys.argv)>1:
+        configfile=sys.argv[1]
     else:
         configfile='bootstrap.cfg'
     myconfig.read(configfile)
