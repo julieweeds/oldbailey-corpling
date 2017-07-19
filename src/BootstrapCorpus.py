@@ -47,10 +47,14 @@ def validated(reqlist, valuedata):
 
 
         else:
-            if (parts[1] == "max" or parts[1] == "min") and parts[0] in valuedata.keys():
+            if parts[1]=="not" and parts[0] in valuedata.keys():
+                if value in valuedata[parts[0]].keys():
+                    reqdict[field] = value
+
+            elif (parts[1] == "max" or parts[1] == "min") and parts[0] in valuedata.keys():
 
                 if isinstance(value, list):
-                    logging.warning("Error: min and max cannot be list")
+                    logging.warning("Error: not, min and max cannot be list")
 
                 elif value in valuedata[parts[0]].keys() and isinstance(value, int):
                     reqdict[field] = value
@@ -80,7 +84,9 @@ def find_trials(worddf, trialdf,reqlist, join='obo_trial'):
         parts = req.split(':')
         value = trialreqdict[req]
         if len(parts)>1:
-            if parts[1]=='max':
+            if parts[1]=='not':
+                trials=trials[trials[parts[0]]!=value]
+            elif parts[1]=='max':
                 trials=trials[trials[parts[0]]<=value]
             elif parts[1]=='min':
                 trials=trials[trials[parts[0]]>=value]
@@ -113,7 +119,9 @@ def bootstrap_corpus(worddata, trials, reqs,prop=100):
             parts = req.split(':')
             value = allreqdict[req]
             if len(parts) > 1:
-                if parts[1] == 'max':
+                if parts[1]=='not':
+                    wdf=wdf[wdf[parts[0]]!=value]
+                elif parts[1] == 'max':
                     wdf = wdf[wdf[parts[0]] <= value]
                 elif parts[1] == 'min':
                     wdf = wdf[wdf[parts[0]] >= value]
@@ -161,10 +169,18 @@ def compare(corpusA, corpusB, indicatordict):
             indicatordict[word] = indicatordict.get(word, 0) + 1
     return indicatordict
 
+def negate(requirements):
+
+    negreqs=[]
+    for (field,value) in requirements:
+        negfield=field+":not"
+        negreqs.append((negfield,value))
+
+    return negreqs
 
 def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, prop=100):
     logging.info("Finding trials to meet requirements")
-    trialsB = find_trials(worddata, trialdata, allreqs)
+    trialsB = find_trials(worddata, trialdata, allreqs + negate(corpusAreqs))
     logging.info(len(trialsB))
     trialsA = find_trials(worddata, trialdata, allreqs + corpusAreqs)
     logging.info(len(trialsA))
@@ -172,7 +188,7 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
     for i in range(0, repeats):
         starttime=time()
         logging.info("Bootstrapping corpusB repetition {}".format(i))
-        corpB = bootstrap_corpus(worddata, trialsB, allreqs,prop=prop)
+        corpB = bootstrap_corpus(worddata, trialsB, allreqs + negate(corpusAreqs),prop=prop)
         logging.info("Analysing corpus")
         corpusB = nlp_tools.corpus(corpB, nlp, prop=100, ner=False, loadfiles=False)
         for j in range(0, repeats):
@@ -217,7 +233,7 @@ if __name__=="__main__":
 
     for Areq,outfile in zip(Areqs,outfiles):
 
-        candidates=bootstrap_compare([Areq],allreqlist,worddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
+        candidates=bootstrap_compare(Areq,allreqlist,worddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
         logging.info(candidates[:10])
         surprising=[(cand,score) for (cand,score) in candidates if score > 0.9]
         logging.info(len(surprising))
