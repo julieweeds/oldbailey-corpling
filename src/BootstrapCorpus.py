@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import matplotlib as plt
 from collections import defaultdict
 import random
@@ -207,6 +208,26 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
     sortedlist = sorted(candidates, key=operator.itemgetter(1), reverse=True)
     return sortedlist
 
+def update_random(wdf,Areqlist):
+
+    #check to see if Areq is a "random" requirement
+    #if so add a random field
+
+    newdf=pd.DataFrame(wdf)
+    Breqlist=[]
+    for Areq in Areqlist:
+        if Areq[0].startswith("random2"):
+            parts=Areq[0].split("_")
+            prop=int(parts[1])
+            sLength=len(wdf)
+            rchoice=pd.Series(['A' if r<prop else 'B' for r in 100*np.random.random(sLength)])
+
+            newdf=newdf.assign(rchoice=rchoice.values)
+            Breqlist.append(('rchoice',Areq[1]))
+        else:
+            Breqlist.append(Areq)
+
+    return (newdf,Breqlist)
 
 if __name__=="__main__":
 
@@ -232,8 +253,10 @@ if __name__=="__main__":
     Areqs=ast.literal_eval(myconfig.get('default','Areqs'))
 
     for Areq,outfile in zip(Areqs,outfiles):
-
-        candidates=bootstrap_compare(Areq,allreqlist,worddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
+        #print(Areq)
+        logging.info("Checking for random requirements")
+        myworddata,Breq=update_random(worddata,Areq)
+        candidates=bootstrap_compare(Breq,allreqlist,myworddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
         logging.info(candidates[:10])
         surprising=[(cand,score) for (cand,score) in candidates if score > 0.9]
         logging.info(len(surprising))
