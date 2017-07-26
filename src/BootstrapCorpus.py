@@ -108,12 +108,15 @@ def bootstrap1(wdf, tdf, reqs):
     print(c)
 
 
-def bootstrap_corpus(worddata, trials, reqs,prop=100):
+def bootstrap_corpus(worddata, trials, reqs,prop=100,size=0):
     N = len(trials)
     corpus = []
     N=int(N*prop/100)
     allreqdict = validated(reqs, make_countdict(worddata))
-    for i in range(0, N):
+    i=0
+    cont=True
+    while cont:
+        i+=1
         atrial = random.choice(trials)
         wdf = worddata[worddata['obo_trial'] == atrial]
         for req in allreqdict.keys():
@@ -132,7 +135,45 @@ def bootstrap_corpus(worddata, trials, reqs,prop=100):
                 wdf = wdf[wdf[req] == value]
 
         corpus += [line for line in wdf['words']]
+        if size>0 and len(corpus)>=size:
+            cont=False
+        elif size==0 and i>=N:
+            cont =False
+
     return corpus
+
+def generate_corpus(worddata, trials, reqs,prop=100,size=0):
+    N = len(trials)
+    corpus = []
+    N=int(N*prop/100)
+    allreqdict = validated(reqs, make_countdict(worddata))
+
+    for i,atrial in enumerate(trials):
+        wdf = worddata[worddata['obo_trial'] == atrial]
+        for req in allreqdict.keys():
+            parts = req.split(':')
+            value = allreqdict[req]
+            if len(parts) > 1:
+                if parts[1]=='not':
+                    wdf=wdf[wdf[parts[0]]!=value]
+                elif parts[1] == 'max':
+                    wdf = wdf[wdf[parts[0]] <= value]
+                elif parts[1] == 'min':
+                    wdf = wdf[wdf[parts[0]] >= value]
+            elif isinstance(value, list):
+                wdf = wdf[wdf[req].isin(value)]
+            else:
+                wdf = wdf[wdf[req] == value]
+
+        corpus += [line for line in wdf['words']]
+
+        if size>0 and len(corpus)>size:
+            break
+        elif size==0 and i>=N:
+            break
+
+    return corpus
+
 
 
 # For a given set of corpora, find the frequency distribution of the k highest frequency words
@@ -186,24 +227,27 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
     trialsA = find_trials(worddata, trialdata, allreqs + corpusAreqs)
     logging.info(len(trialsA))
     indicatordict = {}
-    for i in range(0, repeats):
+
+    logging.info("Generating corpusB")
+    corpB = generate_corpus(worddata, trialsB, allreqs + negate(corpusAreqs),prop=prop)
+    logging.info("Analysing corpus")
+    corpusB = nlp_tools.corpus(corpB, nlp, prop=100, ner=False, loadfiles=False)
+    for j in range(0, repeats):
+
         starttime=time()
-        logging.info("Bootstrapping corpusB repetition {}".format(i))
-        corpB = bootstrap_corpus(worddata, trialsB, allreqs + negate(corpusAreqs),prop=prop)
+        logging.info("Bootstrapping corpusA repetition {}".format(j))
+        #make the size of corpA the same as the size of corpB i.e., over or under sample accordingly
+        corpA = bootstrap_corpus(worddata, trialsA, allreqs + corpusAreqs,prop=prop,size=len(corpB))
+
         logging.info("Analysing corpus")
-        corpusB = nlp_tools.corpus(corpB, nlp, prop=100, ner=False, loadfiles=False)
-        for j in range(0, repeats):
-            logging.info("Bootstrapping corpusA repetition {}".format(j))
-            corpA = bootstrap_corpus(worddata, trialsA, allreqs + corpusAreqs,prop=prop)
-            logging.info("Analysing corpus")
-            corpusA = nlp_tools.corpus(corpA, nlp, prop=100, ner=False, loadfiles=False)
-            logging.info("Comparing corpora")
-            timetaken=time()-starttime
-            logging.info("Time taken for this iteration: {}".format(timetaken))
-            indicatordict = compare(corpusA, corpusB, indicatordict)
+        corpusA = nlp_tools.corpus(corpA, nlp, prop=100, ner=False, loadfiles=False)
+        logging.info("Comparing corpora")
+        timetaken=time()-starttime
+        logging.info("Time taken for this iteration: {}".format(timetaken))
+        indicatordict = compare(corpusA, corpusB, indicatordict)
 
     logging.info("Generating candidates")
-    N = repeats * repeats
+    N = repeats
     candidates = [(term, (value + 1) / (N + 1)) for (term, value) in indicatordict.items()]
     sortedlist = sorted(candidates, key=operator.itemgetter(1), reverse=True)
     return sortedlist
