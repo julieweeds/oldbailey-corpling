@@ -36,6 +36,7 @@ class corpus:
         self.allworddict=defaultdict(int)
         self.worddict=defaultdict(int)
         self.noundict=defaultdict(int)
+        self.propnoundict=defaultdict(int)
         self.verbdict=defaultdict(int)
         self.adjdict=defaultdict(int)
         self.advdict=defaultdict(int)
@@ -49,6 +50,7 @@ class corpus:
 
         self.wordtotal=0
         self.nountotal=0
+        self.propnountotal=0
         self.verbtotal=0
         self.adjtotal=0
         self.advtotal=0
@@ -129,6 +131,9 @@ class corpus:
                     if token.pos_ =="NOUN":
                         self.noundict[token.lemma_]+=1
                         self.nountotal+=1
+                    elif token.pos_ =="PROPN":
+                        self.propnoundict[token.lemma_]+=1
+                        self.propnountotal+=1
                     elif token.pos_=="VERB":
                         self.verbdict[token.lemma_]+=1
                         self.verbtotal+=1
