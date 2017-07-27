@@ -135,10 +135,8 @@ def bootstrap_corpus(worddata, trials, reqs,prop=100,size=0):
                 wdf = wdf[wdf[req] == value]
 
         corpus += [line for line in wdf['words']]
-        if size>0 and len(corpus)>=size:
+        if i>N or(size>0 and len(corpus)>=size):  #under-sample so corpus is not bigger than specified size, no over-sampling
             cont=False
-        elif size==0 and i>=N:
-            cont =False
 
     return corpus
 

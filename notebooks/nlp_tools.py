@@ -33,6 +33,7 @@ class corpus:
         self.prop=prop
         self.name=""
         self.docs=[]
+        self.nlpdocs=[]
         self.allworddict=defaultdict(int)
         self.worddict=defaultdict(int)
         self.noundict=defaultdict(int)
@@ -68,7 +69,7 @@ class corpus:
             with open(ipf) as input:
                 self.name+="_"+ipf
                 for line in input:
-                    self.docs.append(line)
+                    self.docs.append(line.rstrip())
                 
        
     
@@ -86,6 +87,7 @@ class corpus:
         self.count=0        
         for doc in self.docs:
             nlpdoc=self.basic_analyse_single(doc)
+            self.nlpdocs.append(nlpdoc)
             if ner:
                 self.explore_ner(nlpdoc,self.count)
         
