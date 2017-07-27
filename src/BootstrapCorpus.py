@@ -218,7 +218,41 @@ def negate(requirements):
 
     return negreqs
 
-def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, prop=100):
+
+def check_convergence(newdict,cache,outfile,N,t=0.9):
+
+    candidates = [(term, (value + 1) / (N + 1)) for (term, value) in newdict.items()]
+    sortedlist = sorted(candidates, key=operator.itemgetter(1), reverse=True)
+    newcache={}
+    with open(outfile,"w") as outstream:
+        for (term, score) in sortedlist:
+            if score < 0.505:
+                break
+            else:
+                outstream.write("{}\t{}\n".format(term, score))
+                newcache[term]=score
+
+    absdiffs=[]
+    for term in newcache.keys():
+        if newcache[term]>t:
+            absdiffs.append(abs(newcache[term]-cache.get(term,0)))
+    for term in cache.keys():
+        if cache[term]>t:
+            absdiffs.append(abs(newcache.get(term,0)-cache[term]))
+    #logging.info(absdiffs)
+    if len(absdiffs)>0:
+        cvscore=np.percentile(absdiffs,99)
+    else:
+        cvscore=1
+    logging.info("99% convergence level at {} = {}".format(N,cvscore))
+    if cvscore<0.005:
+        return newcache,True
+    else:
+        return newcache,False
+
+
+
+def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, prop=100,interval=100,outfile_stem="words"):
     logging.info("Finding trials to meet requirements")
     trialsB = find_trials(worddata, trialdata, allreqs + negate(corpusAreqs))
     logging.info(len(trialsB))
@@ -230,6 +264,8 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
     corpB = generate_corpus(worddata, trialsB, allreqs + negate(corpusAreqs),prop=prop)
     logging.info("Analysing corpus")
     corpusB = nlp_tools.corpus(corpB, nlp, prop=100, ner=False, loadfiles=False)
+    cacheddict={}
+    N=repeats
     for j in range(0, repeats):
 
         starttime=time()
@@ -243,9 +279,14 @@ def bootstrap_compare(corpusAreqs, allreqs, worddata, trialdata, repeats=10, pro
         timetaken=time()-starttime
         logging.info("Time taken for this iteration: {}".format(timetaken))
         indicatordict = compare(corpusA, corpusB, indicatordict)
+        if (j+1)%interval==0:
+            cacheddict,stop=check_convergence(indicatordict,cacheddict,outfile_stem+"_"+str(j+1),j+1)
+
+            if stop:
+                N=j+1
+                break
 
     logging.info("Generating candidates")
-    N = repeats
     candidates = [(term, (value + 1) / (N + 1)) for (term, value) in indicatordict.items()]
     sortedlist = sorted(candidates, key=operator.itemgetter(1), reverse=True)
     return sortedlist
@@ -298,7 +339,7 @@ if __name__=="__main__":
         #print(Areq)
         logging.info("Checking for random requirements")
         myworddata,Breq=update_random(worddata,Areq)
-        candidates=bootstrap_compare(Breq,allreqlist,myworddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'))
+        candidates=bootstrap_compare(Breq,allreqlist,myworddata,trialdata,repeats=myconfig.getint('default','repeats'),prop=myconfig.getint('default','prop'),interval=myconfig.getint('default','interval'),outfile_stem=outfile)
         logging.info(candidates[:10])
         surprising=[(cand,score) for (cand,score) in candidates if score > 0.9]
         logging.info(len(surprising))
