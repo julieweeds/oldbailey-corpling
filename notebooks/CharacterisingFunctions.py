@@ -164,6 +164,46 @@ def autolabel(rects, ax):
                 '%1.1f' % height,
                 ha='center', va='bottom')
 
+def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10):
+    width=0.7/len(hfw_list)
+    toplot=[]
+    for hfw in hfw_list:
+        corpussize=hfw[0]
+        if words==[]:
+            todisplay=hfw[1][:cutoff]
+        else:
+            todisplay=[(x,y) for (x,y) in hfw[1] if x in words]
+            cutoff=len(words)
+        barvalues=sorted(todisplay,key=operator.itemgetter(0),reverse=False)
+        #print(barvalues)
+        xs,ys=[*zip(*barvalues)]
+        ps=[y*100/corpussize for y in ys]
+    
+        toplot.append(ps)
+        
+    N=cutoff
+    ind=np.arange(N)
+    fig,ax=plt.subplots(figsize=(2*cutoff,cutoff/2))
+    rectset=[]
+    colors=['r','b','y','g']
+    for i,ps in enumerate(toplot):
+        rectset.append(ax.bar(ind+i*width,ps,width,color=colors[i]))
+    
+    if leg!=None:
+        ax.legend(rectset,leg)
+    ax.set_xticks(ind)
+    ax.set_xticklabels(xs)
+    ax.set_xlabel('High Frequency Words')
+    ax.set_ylabel('Probability')
+    ax.set_ylim(0,ylim)
+    for rects in rectset:
+        autolabel(rects,ax)
+    if title!=None:
+        ax.set_title(title)
+    
+    return xs
+    
+
 
 def improved_display_list(xvalues, yvalueslist, labels={}):
     width = 0.7 / len(yvalueslist)
