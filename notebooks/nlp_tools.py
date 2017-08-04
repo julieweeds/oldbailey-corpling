@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib as plt
 get_ipython().magic('matplotlib inline')
 import time
-nlp=spacy.load('en')
+#nlp=spacy.load('en')
 from collections import defaultdict
 import operator,math
 from gensim.models import Word2Vec
@@ -106,7 +106,7 @@ class corpus:
     def basic_analyse_single(self,doc):
         
         self.count+=1
-        nlpdoc=nlp(doc)
+        nlpdoc=self.nlp(doc)
         nosents=0
         for sent in nlpdoc.sents:
             sent_text=[]

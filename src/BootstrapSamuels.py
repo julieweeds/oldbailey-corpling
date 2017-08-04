@@ -9,6 +9,7 @@ import logging
 import configparser,ast,os,sys
 from time import time
 import CharacterisingFunctions as cf
+import csv
 
 
 def process_header(header):
@@ -45,14 +46,21 @@ def do_include_text(line):
 
 class Samuels:
     alias = {'q#TOTEN': 'vard', '#TOTEN': 'vard'}
+    semtag_split={'SEMTAG1':' ','SEMTAG2':';','SEMTAG3':';'}
 
-    def __init__(self, filepaths, prop=10, chunksize=10):
+    def __init__(self, filepaths, prop=10, chunksize=10,lowercase=True,nlp=None,semtag_first=True):
         self.filepaths = filepaths
         self.prop = 10
         self.chunksize = 10
+        self.lowercase=lowercase
+        self.semtag_first=semtag_first
 
         self.rows = []
-        self.cols = ['id', 'chunk', 'sentence']
+        self.cols = ['id', 'key']
+        if self.lowercase:
+            self.cols.append('vard_lower')
+
+        self.nlp=nlp
 
         self.loadfile()
 
@@ -67,13 +75,26 @@ class Samuels:
             if value not in self.cols:
                 self.cols.append(value)
 
+    def update_semtags(self, row):
+        newrow = {}
+        for key in row.keys():
+            if key in Samuels.semtag_split.keys():
+                splitchar = Samuels.semtag_split[key]
+                field = str(row[key])
+                parts = field.split(splitchar)
+                newrow[key] = parts[0]
+            else:
+                newrow[key] = row[key]
+        return newrow
+
     def loadfile(self):
         self.errors = []
         for filepath in self.filepaths:
             logging.info("Reading {}".format(filepath))
             with open(filepath) as instream:
                 newfile = True
-                self.sentences = 0
+                self.sentences = -1
+                insent=-1
                 for count, line in enumerate(instream):
                     row = {}
                     line = line.rstrip()
@@ -83,14 +104,22 @@ class Samuels:
                         self.addtocols(headerdict.values())
                         newfile = False
                     elif len(parts) == 7:  # well-formed line
+                        insent+=1
                         for i, field in enumerate(parts):
                             row[headerdict[i]] = field
                         # print(row)
                         if row['vard'] == 'S_BEGIN':
                             self.sentences += 1
+                            insent=-1
+                        if self.lowercase:
+                            row['vard_lower']=row['vard'].lower()
+                        row['insent']=insent
                         row['id'] = count
                         row['sentence'] = self.sentences
                         row['chunk'] = int(self.sentences / self.chunksize)
+                        row['key']="{}:{}:{}".format(row['chunk'],row['sentence'],row['insent'])
+                        if self.semtag_first:
+                            row=self.update_semtags(row)
                         self.rows.append(row)
                     else:
                         self.errors.append(line)
@@ -148,6 +177,8 @@ class Samuels:
         else:
             df = self.get_dataframe()
         df = df[df['LEMMA'] != 'NULL']
+        if self.lowercase and field=='vard':
+            field='vard_lower'
         for item in df[field]:
             sumdict[item] = sumdict.get(item, 0) + 1
             corpussize += 1
@@ -156,11 +187,15 @@ class Samuels:
         candidates = sorted(sumdict.items(), key=operator.itemgetter(1), reverse=True)
         return corpussize, candidates[:k]
 
-    def find_text(self, semtag, field='SEMTAG1'):
+    def find_text(self, semtag, field='SEMTAG3'):
 
         df = self.get_dataframe()
         df = df[df['LEMMA'] != 'NULL']
-        mylemmas = df[df[field] == semtag].groupby('vard')['id'].nunique()
+        if self.lowercase:
+            groupby='vard_lower'
+        else:
+            groupby='vard'
+        mylemmas = df[df[field] == semtag].groupby(groupby)['id'].nunique()
         mylemmas = mylemmas.sort_values(ascending=False)
         mylist = list(mylemmas[0:10].index.values)
         return mylist
@@ -356,9 +391,10 @@ if __name__=="__main__":
         surprising = [(cand, score) for (cand, score) in candidates if score > 0.9]
         logging.info(len(surprising))
         with open(outfile+"_B", 'w') as outstream:
+            csvwriter=csv.writer(outstream,delimiter='\t',quotechar='\"',quoting=csv.QUOTE_MINIMAL)
             for (term, score) in candidates:
                 if score < 0.505:
                     break
                 else:
-                    outstream.write("{}\t{}\n".format(term, score))
+                    csvwriter.writerow([term,score])
 
