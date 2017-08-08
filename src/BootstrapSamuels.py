@@ -56,7 +56,7 @@ class Samuels:
         self.semtag_first=semtag_first
 
         self.rows = []
-        self.cols = ['id', 'key']
+        self.cols = ['id', 'key', 'chunk']
         if self.lowercase:
             self.cols.append('vard_lower')
 
