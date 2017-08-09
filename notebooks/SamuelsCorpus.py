@@ -9,6 +9,9 @@ import configparser,ast,os,sys
 from time import time
 import CharacterisingFunctions as cf
 
+import warnings
+warnings.filterwarnings('ignore')
+
 from spacy.tokens import Doc
 
 
@@ -65,11 +68,12 @@ class SamuelsCorpus:
     alias = {'q#TOTEN': 'vard', '#TOTEN': 'vard'}
     semtag_split = {'SEMTAG1': ' ', 'SEMTAG2': ';', 'SEMTAG3': ';'}
 
-    def __init__(self):
+    def __init__(self,colors=None):
         #this will be overrided in general
 
         self.rows=[]
         self.cols=[]
+        self.colors=colors
 
     def get_dataframe(self):
 
@@ -89,9 +93,13 @@ class Processor(SamuelsCorpus):
         if outfile=='':
             self.outfile=self.filenames[0]+"_combined.csv"
             self.ppmimatfile=self.filenames[0]+"_cooccurrence.json"
+            self.ppmibyrel=self.filenames[0]+"_cooccurrence_byrel.json"
+            self.relfile=self.filenames[0]+"_rel.json"
         else:
             self.outfile=outfile+"_combined.csv"
             self.ppmimatfile=outfile+"_coocccurrence.json"
+            self.ppmibyrel=outfile+"_cooccurrence_byrel.json"
+            self.relfile=outfile+"_rel.json"
 
         self.chunksize = chunksize
         self.lowercase = lowercase
@@ -317,28 +325,70 @@ class Processor(SamuelsCorpus):
         # print("{}:{}:{}".format(start,rel,end))
         try:
             forward = "{}:{}".format(rel, end)
-            backward = "_{}:{}".format(rel, start)
+            invrel="_{}".format(rel)
+            backward = "{}:{}".format(invrel, start)
         except:
             print("Error processing feature in chunk {}".format(chunk))
             print(row)
             print(head, field, feat)
             return
-        adict = self.features.get(start, None)
-        if adict == None:
-            adict = {}
+        adict = self.features.get(start, {})
+
         adict[forward] = adict.get(forward, 0) + 1
         self.features[start] = adict
+
+        reldict= self.featuresbyrel.get(rel,{})
+        thisreldict=reldict.get(start,{})
+        thisreldict[end]= thisreldict.get(end,0)+1
+        reldict[start]=thisreldict
+        self.featuresbyrel[rel]=reldict
+
         self.rowtotals[start] = self.rowtotals.get(start, 0) + 1
+        rtbyrel=self.rowtotalsbyrel.get(rel,{})
+        rtbyrel[start]=rtbyrel.get(start,0)+1
+        self.rowtotalsbyrel[rel]=rtbyrel
+
         self.columntotals[forward] = self.columntotals.get(forward, 0) + 1
+        ctbyrel=self.columntotalsbyrel.get(rel,{})
+        ctbyrel[end]=ctbyrel.get(end,0)+1
+        self.columntotalsbyrel[rel]=ctbyrel
+
         self.grandtotal += 1
-        bdict = self.features.get(end, None)
-        if bdict == None:
-            bdict = {}
+        self.grandtotalbyrel[rel]=self.grandtotalbyrel.get(rel,0)+1
+
+        bdict = self.features.get(end, {})
         bdict[backward] = bdict.get(backward, 0) + 1
         self.features[end] = bdict
+
+        reldict=self.featuresbyrel.get(invrel,{})
+        thisreldict=reldict.get(end,{})
+        thisreldict[start]=thisreldict.get(start,0)+1
+        reldict[end]=thisreldict
+        self.featuresbyrel[invrel]=reldict
+
         self.rowtotals[end] = self.rowtotals.get(end, 0) + 1
+        rtbyrel=self.rowtotalsbyrel.get(invrel,{})
+        rtbyrel[end]=rtbyrel.get(end,0)+1
+        self.rowtotalsbyrel[invrel]=rtbyrel
+
         self.columntotals[backward] = self.columntotals.get(backward, 0) + 1
+        ctbyrel=self.columntotalsbyrel.get(invrel,{})
+        ctbyrel[start]=ctbyrel.get(start,0)+1
+        self.columntotalsbyrel[invrel]=ctbyrel
         self.grandtotal += 1
+        self.grandtotalbyrel[invrel]=self.grandtotalbyrel.get(invrel,0)+1
+
+        relfeatures=self.relfeatures.get(start,{})
+        relfeatures[rel]=relfeatures.get(rel,0)+1
+        self.relfeatures[start]=relfeatures
+        relfeatures=self.relfeatures.get(end,{})
+        relfeatures[invrel]=relfeatures.get(invrel,0)+1
+        self.relfeatures[end]=relfeatures
+
+        self.reltotals[rel]=self.reltotals.get(rel,0)+1
+        self.reltotals[invrel]=self.reltotals.get(invrel,0)+1
+
+
 
     def extract(self, field='vard', reset=False):
         # keys=self.df['id'].unique()
@@ -349,6 +399,12 @@ class Processor(SamuelsCorpus):
                 del self.rowtotals
                 del self.columntotals
                 del self.grandtotal
+                del self.featuresbyrel
+                del self.rowtotalsbyrel
+                del self.columntotalsbyrel
+                del self.grandtotalbyrel
+                del self.relfeatures
+                del self.reltotals
             except:
                 pass
 
@@ -360,6 +416,12 @@ class Processor(SamuelsCorpus):
             self.rowtotals = {}
             self.columntotals = {}
             self.grandtotal = 0
+            self.featuresbyrel={}
+            self.rowtotalsbyrel={}
+            self.columntotalsbyrel={}
+            self.grandtotalbyrel={}
+            self.relfeatures={}
+            self.reltotals={}
 
             count = 0
             for row in self.cdf.itertuples():
@@ -375,6 +437,7 @@ class Processor(SamuelsCorpus):
         if reset:
             try:
                 del self.pmi_matrix
+                del self.pmi_matrix_byrel
             except:
                 pass
 
@@ -393,6 +456,36 @@ class Processor(SamuelsCorpus):
                     if pmi > 0:
                         pmi_feats[feat] = pmi
                 self.pmi_matrix[key] = pmi_feats
+
+            self.rel_matrix={}
+            for key,featdict in self.relfeatures.items():
+                pmi_feats={}
+                for feat, value in featdict.items():
+                    rowtotal=self.rowtotals[key]
+                    coltotal=self.reltotals[feat]
+                    pmi=math.log((featdict[feat]*self.grandtotal)/(rowtotal*coltotal))
+                    if pmi>0:
+                        pmi_feats[feat]=pmi
+                self.rel_matrix[key]=pmi_feats
+
+            self.pmi_matrix_byrel={}
+            for rel in self.featuresbyrel.keys():
+                features=self.featuresbyrel[rel]
+                rowtotals=self.rowtotalsbyrel[rel]
+                columntotals=self.columntotalsbyrel[rel]
+                grandtotal=self.grandtotalbyrel[rel]
+                pmi_matrix={}
+                for key,featdict in features.items():
+                    pmi_feats={}
+                    for feat,value in featdict.items():
+                        rowtotal=rowtotals[key]
+                        coltotal=columntotals[feat]
+                        pmi=math.log((featdict[feat]*grandtotal)/(rowtotal*coltotal))
+                        if pmi>0:
+                            pmi_feats[feat]=pmi
+                    pmi_matrix[key]=pmi_feats
+                self.pmi_matrix_byrel[rel]=pmi_matrix
+
             return self.pmi_matrix
 
     def run(self,field='SEMTAG3'):
@@ -408,17 +501,24 @@ class Processor(SamuelsCorpus):
         ppmi_matrix=self.convert_to_ppmi(reset=True)
         with open(self.ppmimatfile,'w') as outstream:
             json.dump(ppmi_matrix,outstream)
-        print("Completed successfully, writing {} and {}".format(self.outfile,self.ppmimatfile))
+
+        with open(self.ppmibyrel,'w') as outstream:
+            json.dump(self.pmi_matrix_byrel,outstream)
+
+
+        with open(self.relfile,'w') as outstream:
+            json.dump(self.rel_matrix,outstream)
+        print("Completed successfully, writing {}, {},{} and {}".format(self.outfile,self.ppmimatfile,self.ppmibyrel,self.relfile))
 
 
 class Viewer(SamuelsCorpus):
     #functionality for viewing corpus and distributions
 
-    def __init__(self,infile,parentdir='',lowercase=True,refdf=False):
+    def __init__(self,infile,parentdir='',lowercase=True,refdf=False,colors=None):
         #need to set up and load in dataframes and ppmi_matrices
         self.lowercase=lowercase
         self.parentdir=parentdir
-
+        self.colors=colors
 
         if refdf:
             self.dataframe=infile
@@ -431,17 +531,57 @@ class Viewer(SamuelsCorpus):
     def loadfiles(self):
         dffile=os.path.join(self.parentdir,self.infile+"_combined.csv")
         matfile=os.path.join(self.parentdir,self.infile+"_cooccurrence.json")
+        matbyrelfile=os.path.join(self.parentdir,self.infile+"_cooccurrence_byrel.json")
+        relfile=os.path.join(self.parentdir,self.infile+"_rel.json")
 
-        self.dataframe = pd.read_csv(dffile,keep_default_na=False,na_values=['NaN'])
-        self.columnindex = make_index(self.dataframe.columns)
-        with open(matfile,'r') as instream:
-            self.pmi_matrix=json.load(instream)
+        try:
+            self.dataframe = pd.read_csv(dffile,keep_default_na=False,na_values=['NaN'])
+            self.columnindex = make_index(self.dataframe.columns)
+        except:
+            print("Error reading data file {}".format(dffile))
+
+        try:
+            with open(matfile,'r') as instream:
+                self.pmi_matrix=json.load(instream)
+        except:
+            print("Error loading pmi matrix file {}".format(matfile))
+
+        try:
+            with open(matbyrelfile,'r') as instream:
+                self.pmi_matrix_byrel=json.load(instream)
+        except:
+            print("Error loading pmi_by_relation file {}".format(matbyrelfile))
+
+        try:
+            with open(relfile,'r') as instream:
+                self.rel_matrix=json.load(instream)
+        except:
+            print("Error loading relation file {}".format(relfile))
 
     def get_pmimatrix(self):
         try:
             return self.pmi_matrix
         except:
             print("Error: No pmi matrix defined for this viewer (it is probably a reference dataframe for corpora comparison)")
+
+    def get_relmatrix(self):
+        try:
+            return self.rel_matrix
+        except:
+            print("Error: No rel matrix defined for this viewer (it is probably a reference dataframe for corpora comparison)")
+
+    def get_pmimatrix_byrel(self,rel):
+
+        try:
+            mat=self.pmi_matrix_byrel
+        except:
+            print("Error: No pmi matrix defined for this viewer (it is probably a reference dataframe for corpora comparison)")
+            return
+        try:
+            return mat[rel]
+        except:
+            print("Error retrieving pmi by rel matrix for {} : Unknown relation".format(rel))
+
 
     def make_bow(self, field='vard', k=100000,cutoff=0,displaygraph=False):
         # turn corpus into a bag of words for a certain field - variant of make_hfw_dist()
@@ -464,7 +604,7 @@ class Viewer(SamuelsCorpus):
                 #print("{}:{}".format(cand,score))
 
         if displaygraph:
-            cf.display_list([(corpussize,candidates[:k])],cutoff=cutoff,xlabel=field+' (High Frequency)')
+            cf.display_list([(corpussize,candidates[:k])],cutoff=cutoff,xlabel=field+' (High Frequency)',colors=self.colors)
         return corpussize, candidates[:k]
 
     def find_text(self, semtag, field='SEMTAG3'):
@@ -483,6 +623,42 @@ class Viewer(SamuelsCorpus):
         # print(mylemmas)
         mylist = list(mylemmas[0:10].index.values)
         mylist = [(t, mylemmas[t]) for t in mylist]
+        return mylist
+
+    def find_specific_text(self,semtag,withtag,rel,field='SEMTAG3'):
+
+        semtag=self.match_tag(semtag,field=field)
+        withtag=self.match_tag(withtag,field=field)
+        df=self.get_dataframe()
+        df=df[df['LEMMA']!='NULL']
+
+        if rel.startswith('_'):
+            rel=rel.split('_')[1]
+            rev=True
+        else:
+
+            rev=False
+
+        if rev:
+            occurrences=df[df[field]==withtag]
+            chunks=list(occurrences['chunk'])
+            ids=list(occurrences['id'])
+            occurrences=df[df['chunk'].isin(chunks)][df['gram_head'].isin(ids)][df[field]==semtag]
+
+        else:
+            occurrences=df[df[field]==withtag][df['gram_dep']==rel]
+            chunks=list(occurrences['chunk'])
+            heads=list(occurrences['gram_head'])
+            occurrences=df[df['chunk'].isin(chunks)][df['id'].isin(heads)][df[field]==semtag]
+
+        if self.lowercase:
+            groupby='vard_lower'
+        else:
+            groupby='vard'
+        mylemmas=occurrences.groupby(groupby)['fileid'].nunique()
+        mylemmas=mylemmas.sort_values(ascending=False)
+        mylist=list(mylemmas[0:10].index.values)
+        mylist=[(t,mylemmas[t]) for t in mylist]
         return mylist
 
     def match_tag(self, brief, field='SEMTAG3'):
@@ -522,20 +698,54 @@ class Viewer(SamuelsCorpus):
         mylist = [(t, mytags[t]) for t in mylist]
         return mylist
 
-    def get_one_best_features(self, key, cutoff=10,field='SEMTAG3'):
+    def get_top_features(self, key, rel=None,cutoff=10,field='SEMTAG3',displaygraph=False):
 
         key=self.match_tag(key,field=field)
-        featdict = self.pmi_matrix[key]
+
+        if rel==None:
+            featdict = self.get_pmimatrix()[key]
+            xlabel="{} co-occurring with {}".format(field,key)
+        else:
+            featdict=self.get_pmimatrix_byrel(rel)[key]
+            xlabel="{} co-occurring with {} in relation {}".format(field,key,rel)
+
+
         candidates = sorted(featdict.items(), key=operator.itemgetter(1), reverse=True)
+
+
+        for cand,score in candidates[0:cutoff]:
+            if rel==None:
+                r=cand.split(':')[0]
+                candtag=cand.split(':')[1]
+            else:
+                candtag=cand
+                r=rel
+            print("({},{}) : {}".format(cand,score,self.find_specific_text(candtag,key,r,field=field)))
+
+        if displaygraph:
+            cf.display_list([(-1,candidates)],cutoff=cutoff,xlabel=xlabel,ylabel='PPMI Score',colors=self.colors)
+
+        return candidates[0:cutoff]
+
+    def get_top_relations(self, key, cutoff=10,field='SEMTAG3',displaygraph=False):
+        key=self.match_tag(key,field=field)
+        featdict= self.get_relmatrix()[key]
+        candidates=sorted(featdict.items(),key=operator.itemgetter(1),reverse=True)
+
+        for cand,score in candidates[0:cutoff]:
+            print("({}, {})".format(cand,score))
+        if displaygraph:
+            cf.display_list([(-1,candidates)],cutoff=cutoff,xlabel='Top relations for {}'.format(key),ylabel='PPMI Score',colors=self.colors)
         return candidates[0:cutoff]
 
 
-    def get_best_features(self, cutoff=10):
+
+    def get_best_features_all(self, cutoff=10):
         pmi_matrix=self.get_pmimatrix()
 
         best = {}
         for key in pmi_matrix.keys():
-            best[key] = self.get_one_best_features(self, key, cutoff=cutoff)
+            best[key] = self.get_top_features(self, key, cutoff=cutoff)
 
         return best
 
@@ -548,13 +758,14 @@ class Comparator:
         self.parentdir=parentdir
 
         self.viewerdict=self.init_viewers()
+        self.colors=['r','b','g','y']
 
 
     def init_viewers(self):
 
         viewerdict={}
-        for key in self.filedict.keys():
-            viewerdict[key]=Viewer(self.filedict[key])
+        for i,key in enumerate(self.filedict.keys()):
+            viewerdict[key]=Viewer(self.filedict[key],colors=[self.colors[i]])
         return viewerdict
 
     def get_reference_viewer(self):
