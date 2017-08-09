@@ -155,7 +155,7 @@ def autolabel(rects, ax):
     maxheight=np.array([rect.get_height() for rect in rects]).max()
     if maxheight>1:
         aformat='%1.1f'
-        add=1
+        add=math.log(maxheight,10)
     else:
         aformat='%.3f'
         add=0.0005
@@ -166,9 +166,9 @@ def autolabel(rects, ax):
         ax.text(rect.get_x() + rect.get_width() / 2., height + add,
                 aformat % height,
                 ha='center', va='bottom')
-    return maxheight*1.1
+    return (maxheight+add)*1.1
 
-def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10,abbrevx=True,xlabel='High Frequency Words',ylabel='Probability'):
+def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10,abbrevx=True,xlabel='High Frequency Words',ylabel='Probability',colors=None):
     width=0.7/len(hfw_list)
     toplot=[]
     for hfw in hfw_list:
@@ -187,12 +187,14 @@ def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10,abbrevx
             ps=ys
 
         toplot.append(ps)
-        
-    N=cutoff
+
+    #print(toplot)
+    N=len(xs)
     ind=np.arange(N)
     fig,ax=plt.subplots(figsize=(2*cutoff,cutoff/2))
     rectset=[]
-    colors=['r','b','y','g']
+    if colors==None:
+        colors=['r','b','y','g']
     for i,ps in enumerate(toplot):
         rectset.append(ax.bar(ind+i*width,ps,width,color=colors[i]))
     
