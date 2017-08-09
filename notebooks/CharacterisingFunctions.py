@@ -1,16 +1,11 @@
 #taking the code out of CharacteristicWords.ipynb and analysis.ipynb to make available elsewhere
 
-import spacy
-import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import time
-from collections import defaultdict
-import operator,math
-from gensim.models import Word2Vec
+import operator
 import math
 
-import nlp_tools
+
 
 
 # For a given set of corpora, find the frequency distribution of the k highest frequency words
@@ -121,7 +116,7 @@ def mysurprise(wf, rwf, cs, rcs, measure, params):
         print("Unknown measure of surprise")
 
 
-def improved_compute_surprises(corpusA, corpusB, measure, params={}):
+def improved_compute_surprises(corpusA, corpusB, measure, params={},k=50,display=True):
     (corpusAsize, wordlistA) = corpusA
     (corpusBsize, wordlistB) = corpusB
     if 'threshold' in params.keys():
@@ -136,9 +131,9 @@ def improved_compute_surprises(corpusA, corpusB, measure, params={}):
     for (term, freq) in wordlistA[:threshold]:
         scores.append((term, mysurprise(freq, dictB.get(term, freq + 1), corpusAsize, corpusBsize, measure, params)))
     sortedscores = sorted(scores, key=operator.itemgetter(1), reverse=True)
-    k = 50
-    print("Top {} terms are ".format(k))
-    print(sortedscores[:k])
+    if display and k>0:
+        print("Top {} terms are ".format(k))
+        print(sortedscores[:k])
     rank = 0
     if measure == "llr":
         for (term, score) in sortedscores:
@@ -148,7 +143,7 @@ def improved_compute_surprises(corpusA, corpusB, measure, params={}):
                 break
         print("{} significantly characterising terms".format(rank))
     else:
-        rank = 50
+        rank = k
     return (sortedscores[:rank])
 
 
@@ -157,14 +152,23 @@ def autolabel(rects, ax):
     Attach a text label above each bar displaying its height
     """
 
+    maxheight=np.array([rect.get_height() for rect in rects]).max()
+    if maxheight>1:
+        aformat='%1.1f'
+        add=1
+    else:
+        aformat='%.3f'
+        add=0.0005
+
+    #print(maxheight,aformat)
     for rect in rects:
         height = rect.get_height()
-
-        ax.text(rect.get_x() + rect.get_width() / 2., height * 1.1,
-                '%1.1f' % height,
+        ax.text(rect.get_x() + rect.get_width() / 2., height + add,
+                aformat % height,
                 ha='center', va='bottom')
+    return maxheight*1.1
 
-def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10):
+def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10,abbrevx=True,xlabel='High Frequency Words',ylabel='Probability'):
     width=0.7/len(hfw_list)
     toplot=[]
     for hfw in hfw_list:
@@ -177,8 +181,11 @@ def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10):
         barvalues=sorted(todisplay,key=operator.itemgetter(0),reverse=False)
         #print(barvalues)
         xs,ys=[*zip(*barvalues)]
-        ps=[y*100/corpussize for y in ys]
-    
+        if corpussize>0:
+            ps=[y*100/corpussize for y in ys]
+        else:
+            ps=ys
+
         toplot.append(ps)
         
     N=cutoff
@@ -192,15 +199,18 @@ def display_list(hfw_list,cutoff=10,words=[],leg=None,title=None,ylim=10):
     if leg!=None:
         ax.legend(rectset,leg)
     ax.set_xticks(ind)
+    if abbrevx:
+        xs=[x.split(' ')[0] for x in xs]
     ax.set_xticklabels(xs)
-    ax.set_xlabel('High Frequency Words')
-    ax.set_ylabel('Probability')
-    ax.set_ylim(0,ylim)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     for rects in rectset:
-        autolabel(rects,ax)
+        ylim=autolabel(rects,ax)
     if title!=None:
         ax.set_title(title)
-    
+    ax.set_ylim(0,ylim)
+
+
     return xs
     
 
