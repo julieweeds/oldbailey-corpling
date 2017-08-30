@@ -97,7 +97,7 @@ class Processor(SamuelsCorpus):
             self.relfile=self.filenames[0]+"_rel.json"
         else:
             self.outfile=outfile+"_combined.csv"
-            self.ppmimatfile=outfile+"_coocccurrence.json"
+            self.ppmimatfile=outfile+"_cooccurrence.json"
             self.ppmibyrel=outfile+"_cooccurrence_byrel.json"
             self.relfile=outfile+"_rel.json"
 
@@ -144,13 +144,13 @@ class Processor(SamuelsCorpus):
 
     def loadfile(self):
         self.errors = []
+        self.allsentences=-1
         for filepath in self.filepaths:
             print("Reading {}".format(filepath))
             with open(filepath) as instream:
                 newfile = True
                 self.sentences = -1
                 insent = 0
-                self.allsentences = -1
                 oldchunk = 0
                 for count, line in enumerate(instream):
                     row = {}
