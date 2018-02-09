@@ -26,12 +26,13 @@ class corpus:
     
     loctypes=["LOC","GPE","FAC"]
     
-    def __init__(self,ipfiles,nlpmodel,prop=10,ner=False,loadfiles=True):
+    def __init__(self,ipfiles,nlpmodel,prop=10,ner=False,loadfiles=True,paired=False):
         #default mode is to load in 10%.  Set prop = 100 to load in whole corpus
         self.sourcefiles=ipfiles
         self.nlp=nlpmodel
         self.prop=prop
         self.name=""
+        self.paired=paired
         self.docs=[]
         self.nlpdocs=[]
         self.allworddict=defaultdict(int)
@@ -48,7 +49,8 @@ class corpus:
         self.sentences=[]
         self.content_sentences=[]
         self.pos_sentences=[]
-
+        self.worddocdict=defaultdict(set)
+        
         self.wordtotal=0
         self.nountotal=0
         self.propnountotal=0
@@ -66,10 +68,17 @@ class corpus:
     def initialise(self):
         print("Loading sourcefiles")
         for ipf in self.sourcefiles:
-            with open(ipf) as input:
+            with open(ipf) as instream:
                 self.name+="_"+ipf
-                for line in input:
-                    self.docs.append(line.rstrip())
+                if self.paired:
+                    self.labels=[]
+                    for line in instream:
+                        parts=line.split('\t')
+                        self.docs.append(parts[0].rstrip())
+                        self.labels.append(parts[1])
+                else:
+                    for line in instream:
+                        self.docs.append(line.rstrip())
                 
        
     
@@ -85,8 +94,12 @@ class corpus:
             tenpercent=(todo//10)+1
         print("Analysing {}%. Chunks of size {}".format(self.prop,tenpercent))
         self.count=0        
-        for doc in self.docs:
-            nlpdoc=self.basic_analyse_single(doc)
+        for i,doc in enumerate(self.docs):
+            if self.paired:
+                label=self.labels[i]
+            else:
+                label="none"
+            nlpdoc=self.basic_analyse_single(doc,label=label)
             self.nlpdocs.append(nlpdoc)
             if ner:
                 self.explore_ner(nlpdoc,self.count)
@@ -96,14 +109,19 @@ class corpus:
                 print("Completed {} docs ({}% complete)".format(str(self.count),str(done)))
                 if done >= self.prop:
                     break
-                
+        if self.paired:
+            print("Calculating document frequencies ....")
+            self.docfreq={}
+            for key in self.worddocdict.keys():
+                self.docfreq[key]=len(self.worddocdict[key])
+        
         print("Number of documents is {}".format(self.count))
         #print("Distribution of document lengths is {}".format(str(self.doclengths)))
         #print("Distribution of sentence lengths is {}".format(str(self.sentencelengths)))
         #print("Distribution of word lengths is {}".format(str(self.wordlengths)))
         #print("Number of docs with 1 sentence is {}".format(self.doclengths[1]))
         
-    def basic_analyse_single(self,doc):
+    def basic_analyse_single(self,doc,label="none"):
         
         self.count+=1
         nlpdoc=self.nlp(doc)
@@ -145,6 +163,9 @@ class corpus:
                     elif token.pos_=="ADV":
                         self.advdict[token.lemma_]+=1
                         self.advtotal+=1
+                        
+                if not label=="none":
+                    self.worddocdict[token.lemma_].add(label)
                         
             self.sentences.append(sent_text)    
             self.content_sentences.append(content_text)

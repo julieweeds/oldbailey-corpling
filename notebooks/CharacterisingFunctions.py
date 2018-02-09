@@ -11,15 +11,20 @@ import math
 # For a given set of corpora, find the frequency distribution of the k highest frequency words
 # Output total size of corpus and sorted list of term, frequency pairs
 
-def find_hfw_dist(corpora, k=100000):
+def find_hfw_dist(corpora, k=100000,ftype='termfreq'):
     # add worddicts for individual corpora
     # sort and output highest frequency words
     # visualise
+    #default is 'termfreq' but can also be used for 'docfreq'
 
     sumdict = {}
     corpussize = 0
     for acorpus in corpora:
-        for (key, value) in acorpus.allworddict.items():
+        if ftype=='docfreq':
+            fdict=acorpus.docfreq
+        else:
+            fdict=acorpus.allworddict
+        for (key, value) in fdict.items():
             sumdict[key.lower()] = sumdict.get(key.lower(), 0) + value
             corpussize += value
 
@@ -31,11 +36,14 @@ def find_hfw_dist(corpora, k=100000):
     return corpussize, candidates[:k]
 
 
+    
+
 def makedict(alist):
     adict = {}
     for (key, value) in alist:
         adict[key] = adict.get(key, 0) + value
     return adict
+
 
 
 def pmi(wordfreq, refwordfreq, corpussize, refcorpussize):
